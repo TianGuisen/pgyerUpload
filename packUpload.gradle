@@ -1,0 +1,256 @@
+import groovy.json.JsonSlurper
+import java.text.SimpleDateFormat
+import groovy.transform.Field
+
+//打包自动上传蒲公英和钉钉
+class Globals {
+    //艾特测试手机号
+    static String[] ATUser = ["123", "123"]
+    //蒲公英的apiId,https://www.pgyer.com/account/api
+    static String debugKey = "aaa"
+    static String releaseKey = "aaa"
+    //钉钉机器人
+    static String dingdingWebhook = ""
+}
+//打debug包
+task packDebug {
+    dependsOn 'assembleDebug'
+}
+//打release包
+task packRelease {
+    dependsOn 'assembleRelease'
+}
+//debug包上传蒲公英钉钉
+task packDebugUpload {
+    dependsOn 'assembleDebug'
+    File apkFileDir = new File(project.buildDir, "outputs/apk/debug")
+    doLast {
+        def uploadFile = findApkFile(apkFileDir)
+        println("uploadFile:" + uploadFile.name)
+        uploadApk(uploadFile, Globals.debugKey, "${rootProject.title}测试包")
+    }
+}
+//release包360加固后上传蒲公英钉钉
+task packSafeReleaseUpload {
+    dependsOn 'assembleRelease'
+    group "startJiaGuApk"
+    doLast {
+        println "360加固---------------------------------------------begin"
+        def currFile = new File(".")
+        // 生成的apk的路径，自己根据情况设定
+        def appFilePath = currFile.getCanonicalPath() +
+                File.separator + "app" + File.separator + "build" + File.separator + "outputs" + File.separator +
+                "apk" + File.separator + "release" + File.separator +
+                "release-${rootProject.title}-v${rootProject.versionName}.apk";
+
+        println "APPPath=" + appFilePath
+
+        if (!new File(appFilePath).exists()) {
+            println "apk not exist , please check it"
+            return
+        }
+        //下面是360加固API的命令操作
+        def cmdBase = 'java -jar jiagu.jar'
+        def cmdLogin = cmdBase + " -login  ${rootProject.jiaGu_UserName}   ${rootProject.jiaGu_Pwd}"
+        def cmdImportSign = cmdBase + ' -importsign ' +
+                rootProject.storeFile.getCanonicalPath() + ' ' + rootProject.storePassword + ' ' + rootProject.keyAlias + ' ' + rootProject.keyPassword
+        def cmdShowSign = cmdBase + ' -showsign'
+        def cmdConfig = cmdBase + ' -config -x86'
+        def cmdShowConfig = cmdBase + ' -showconfig'
+        def cmdVersion = cmdBase + ' -version'
+        def outPath = new File(currFile.getCanonicalPath() +
+                File.separator + "app" + File.separator + "build" + File.separator + "outputs" + File.separator +
+                "apk" + File.separator + "sign") //输出目录这里设置为当前目录
+        if (!outPath.exists()) {
+            outPath.mkdirs()
+        }
+        def cmdJiaGu = cmdBase + ' -jiagu ' + appFilePath + ' ' + outPath.getCanonicalPath() + ' -autosign' + ' -automulpkg'
+        executeJiaGu(cmdLogin)
+        executeJiaGu(cmdImportSign)
+        executeJiaGu(cmdJiaGu)
+
+        println "360加固---------------------------------------------end"
+        File[] files = outPath.listFiles();
+        File findFile = null
+        for (int i = 0; i < files.length; i++) {
+            def tmpFile = findApkFile(files[i])
+            if (files[i].name.endsWith(".apk") && files[i].name.contains(rootProject.versionName)) {
+                findFile = tmpFile
+                break
+            }
+        }
+        println("signFile:" + findFile.name)
+        uploadApk(findFile, Globals.releaseKey, "${rootProject.title}正式包")
+    }
+}
+
+
+def findApkFile(File apkFile) {
+    println("apkFile:" + apkFile.name)
+    if (apkFile.isDirectory()) {
+        def files = apkFile.listFiles()
+        for (int i = 0; i < files.length; i++) {
+            def findFile = findApkFile(files[i])
+            if (findFile != null) {
+                return findFile
+            }
+        }
+    } else if (apkFile.name.endsWith(".apk")) {
+        return apkFile
+    } else return null
+}
+
+def uploadApk(File uploadApkFile, String apiKey, String titleName) {
+    // 查找上传的 apk 文件, 这里需要换成自己 apk 路径
+    println("uploadApk:" + uploadApkFile.absolutePath + "--" + uploadApkFile.exists())
+    if (uploadApkFile == null || !uploadApkFile.exists()) {
+        throw new RuntimeException("apk file not exists!")
+    }
+    println "*************** upload start ***************"
+
+    String BOUNDARY = UUID.randomUUID().toString(); // 边界标识 随机生成
+    String PREFIX = "--", LINE_END = "\r\n";
+    String CONTENT_TYPE = "multipart/form-data"; // 内容类型
+
+    try {
+        URL url = new URL("https://www.pgyer.com/apiv2/app/upload");
+        HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+        conn.setReadTimeout(30000);
+        conn.setConnectTimeout(30000);
+        conn.setDoInput(true); // 允许输入流
+        conn.setDoOutput(true); // 允许输出流
+        conn.setUseCaches(false); // 不允许使用缓存
+        conn.setRequestMethod("POST"); // 请求方式
+        conn.setRequestProperty("Charset", "UTF-8"); // 设置编码
+        conn.setRequestProperty("connection", "keep-alive");
+        conn.setRequestProperty("Content-Type", CONTENT_TYPE + ";boundary=" + BOUNDARY);
+        DataOutputStream dos = new DataOutputStream(conn.getOutputStream());
+
+        StringBuffer sb = new StringBuffer();
+        sb.append(PREFIX).append(BOUNDARY).append(LINE_END);//分界符
+        sb.append("Content-Disposition: form-data; name=\"" + "_api_key" + "\"" + LINE_END);
+        sb.append("Content-Type: text/plain; charset=UTF-8" + LINE_END);
+        //sb.append("Content-Transfer-Encoding: 8bit" + LINE_END);
+        sb.append(LINE_END);
+
+        sb.append(apiKey);//替换成你再蒲公英上申请的apiKey
+
+        sb.append(LINE_END);//换行！
+
+
+        if (uploadApkFile != null) {
+            /**
+             * 当文件不为空，把文件包装并且上传
+             */
+            sb.append(PREFIX);
+            sb.append(BOUNDARY);
+            sb.append(LINE_END);
+            /**
+             * 这里重点注意： name里面的值为服务器端需要key 只有这个key 才可以得到对应的文件
+             * filename是文件的名字，包含后缀名的 比如:abc.png
+             */
+            sb.append("Content-Disposition: form-data; name=\"file\"; filename=\"" + uploadApkFile.getName() + "\"" + LINE_END);
+            sb.append("Content-Type: application/octet-stream; charset=UTF-8" + LINE_END);
+            sb.append(LINE_END);
+            dos.write(sb.toString().getBytes())
+
+            InputStream is = new FileInputStream(uploadApkFile)
+            byte[] bytes = new byte[1024];
+            int len = 0;
+            while ((len = is.read(bytes)) != -1) {
+                dos.write(bytes, 0, len);
+            }
+            is.close();
+            dos.write(LINE_END.getBytes());
+            byte[] end_data = (PREFIX + BOUNDARY + PREFIX + LINE_END).getBytes();
+
+            dos.write(end_data);
+            dos.flush();
+            /**
+             * 获取响应码 200=成功 当响应成功，获取响应的流
+             */
+            int res = conn.getResponseCode();
+            if (res == 200) {
+                println("Upload request success");
+                BufferedReader br = new BufferedReader(new InputStreamReader(conn.getInputStream()))
+                StringBuffer ret = new StringBuffer();
+                String line
+                while ((line = br.readLine()) != null) {
+                    ret.append(line)
+                }
+                String result = ret.toString();
+                println("Upload result : " + result);
+
+                def resp = new JsonSlurper().parseText(result)
+                println result
+                println "*************** upload finish ***************"
+                sendMsgToDing(resp.data, titleName)
+            } else {
+                //发送钉钉 消息--构建失败
+            }
+        }
+    } catch (MalformedURLException e) {
+        e.printStackTrace();
+    } catch (IOException e) {
+        e.printStackTrace();
+    }
+}
+
+def sendMsgToDing(def data, String titleName) {
+    def conn = new URL(Globals.dingdingWebhook).openConnection()
+    conn.setRequestMethod('POST')
+    conn.setRequestProperty("Connection", "Keep-Alive")
+    conn.setRequestProperty("Content-type", "application/json;charset=UTF-8")
+    conn.setConnectTimeout(30000)
+    conn.setReadTimeout(30000)
+    conn.setDoInput(true)
+    conn.setDoOutput(true)
+    def dos = new DataOutputStream(conn.getOutputStream())
+
+    def downloadUrl = "https://www.pgyer.com/" + data.buildShortcutUrl
+    def qrCodeUrl = "![](" + data.buildQRCodeURL + ")"
+    def _content = new StringBuffer()
+    _content.append("${titleName}-${rootProject.versionName}上传成功")
+    _content.append("\n\n")
+    for (int i = 0; i < Globals.ATUser.length; i++) {
+        _content.append("@")
+        _content.append(Globals.ATUser[i])
+    }
+    _content.append("\n\n下载地址:" + downloadUrl)
+    _content.append("\n\n" + qrCodeUrl)
+    def json = new groovy.json.JsonBuilder()
+    json {
+        msgtype "markdown"
+        markdown {
+            title titleName
+            text _content.toString()
+        }
+        at {
+            atMobiles(Globals.ATUser)
+            isAtAll false
+        }
+    }
+
+    println(json)
+    dos.writeBytes(json.toString())
+    def input = new BufferedReader(new InputStreamReader(conn.getInputStream()))
+    String line = ""
+    String result = ""
+    while ((line = input.readLine()) != null) {
+        result += line
+    }
+    dos.flush()
+    dos.close()
+    input.close()
+    conn.connect()
+    println(result)
+
+    println("*************** dingding消息已发送 ***************")
+}
+
+def executeJiaGu(cmd) {
+    def p = cmd.execute(null, new File("$rootProject.jiagubaoPath "))
+    println p.text
+    p.waitFor()  // 用以等待外部进程调用结束
+    println p.exitValue()
+}
