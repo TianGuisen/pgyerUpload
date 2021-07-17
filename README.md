@@ -1,0 +1,30 @@
+项目根目录的build.gradle添加这些
+```
+
+ext {
+    jiagubaoPath = 'C:\\加固宝\\jiagu' //  加固保安装的路劲
+    title="youbao"          //APPtitle，这个可不写，我自己项目写了方便区分不同的app
+    storeFile = file('./app/youbao.jks')               // 签名文件位置，根据实际情况写
+    storePassword = ''                 //  密码
+    keyAlias = ''                           // app别名
+    keyPassword = ''                  //  key密码
+    jiaGu_UserName = ''          //  360加固保用户名
+    jiaGu_Pwd = ''                    //  360加固保登录密码
+}
+```
+
+
+可选:app的build.gradle里添加这些，修改打包时候的文件名
+```
+android {
+    ...
+    //修改打包文件名
+    applicationVariants.all {
+        variant ->
+            variant.outputs.all {
+                //在这里修改apk文件名
+                outputFileName = "${variant.name}-${rootProject.ext.title}-v${variant.versionName}.apk"
+            }
+    }
+}
+```
