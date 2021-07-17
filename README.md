@@ -1,4 +1,6 @@
-项目根目录的build.gradle添加这些
+1.复制packUpload.gradle文件到项目根目录
+
+2.项目根目录的build.gradle添加这些
 ```
 
 ext {
@@ -14,7 +16,7 @@ ext {
 ```
 
 
-可选:app的build.gradle里添加这些，修改打包时候的文件名
+3.可选:app的build.gradle里添加这些，修改打包时候的文件名，不写这个的话需要修改packUpload.gradle里的apk文件名构成，比如44行的代码
 ```
 android {
     ...
