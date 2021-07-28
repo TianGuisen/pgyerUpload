@@ -7,6 +7,7 @@ class Globals {
     //艾特测试手机号
     static String[] ATUser = ["123", "123"]
     //蒲公英的apiId,https://www.pgyer.com/account/api
+    //我自己是搞了2个蒲公英账号，一个用来上传测试包，一个是正式包，因为包名相同在一个账号上上传会视为同一个APP
     static String debugKey = "aaa"
     static String releaseKey = "aaa"
     //钉钉机器人
@@ -38,7 +39,7 @@ task packSafeReleaseUpload {
         println "360加固---------------------------------------------begin"
         def currFile = new File(".")
         // 生成的apk的路径，自己根据情况设定
-        def appFilePath = currFile.getCanonicalPath() +
+        def appFilePath =project.rootDir.absolutePath+
                 File.separator + "app" + File.separator + "build" + File.separator + "outputs" + File.separator +
                 "apk" + File.separator + "release" + File.separator +
                 "release-${rootProject.title}-v${rootProject.versionName}.apk";
@@ -198,6 +199,7 @@ def uploadApk(File uploadApkFile, String apiKey, String titleName) {
 
 def sendMsgToDing(def data, String titleName) {
     def conn = new URL(Globals.dingdingWebhook).openConnection()
+//替换成自己的钉钉webHook的url
     conn.setRequestMethod('POST')
     conn.setRequestProperty("Connection", "Keep-Alive")
     conn.setRequestProperty("Content-type", "application/json;charset=UTF-8")
@@ -209,15 +211,21 @@ def sendMsgToDing(def data, String titleName) {
 
     def downloadUrl = "https://www.pgyer.com/" + data.buildShortcutUrl
     def qrCodeUrl = "![](" + data.buildQRCodeURL + ")"
+//    def detailLink = "[项目地址](${BUILD_URL})"
+
     def _content = new StringBuffer()
     _content.append("${titleName}-${rootProject.versionName}上传成功")
+//    _content.append("\n\n构建类型:${BUILD_TYPE}")
     _content.append("\n\n")
     for (int i = 0; i < Globals.ATUser.length; i++) {
         _content.append("@")
         _content.append(Globals.ATUser[i])
     }
+//    _content.append("\n\n上传时间:" + getNowTime())
     _content.append("\n\n下载地址:" + downloadUrl)
     _content.append("\n\n" + qrCodeUrl)
+//    _content.append("\n\n构建用户:${BUILD_USER}")
+//    _content.append("\n\n查看详情:" + detailLink)
     def json = new groovy.json.JsonBuilder()
     json {
         msgtype "markdown"
@@ -248,8 +256,17 @@ def sendMsgToDing(def data, String titleName) {
     println("*************** dingding消息已发送 ***************")
 }
 
+//获取当前时间
+def getNowTime() {
+    def str = "";
+    SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
+    Calendar lastDate = Calendar.getInstance();
+    str = sdf.format(lastDate.getTime());
+    return str;
+}
+
 def executeJiaGu(cmd) {
-    def p = cmd.execute(null, new File("$rootProject.jiagubaoPath "))
+    def p = cmd.execute(null, new File("${rootProject.jiagubaoPath}"))
     println p.text
     p.waitFor()  // 用以等待外部进程调用结束
     println p.exitValue()

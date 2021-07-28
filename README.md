@@ -4,7 +4,7 @@
 ```
 
 ext {
-    jiagubaoPath = 'C:\\加固宝\\jiagu' //  加固保安装的路劲
+    jiagubaoPath = 'C:\\jiagubao\\jiagu' //  加固保安装的路径，不要用中文路径
     title="youbao"          //APPtitle，这个可不写，我自己项目写了方便区分不同的app
     storeFile = file('./app/youbao.jks')               // 签名文件位置，根据实际情况写
     storePassword = ''                 //  密码
